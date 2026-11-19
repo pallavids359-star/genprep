@@ -71,8 +71,11 @@ const login = async (req, res) => {
         );
 
         // 3. Compare the typed password with the scrambled one
+        // (an account without a passwordHash, e.g. one added by hand in Atlas, can't log in)
         const passwordMatches =
-            user && (await bcrypt.compare(password, user.passwordHash));
+            user &&
+            typeof user.passwordHash === "string" &&
+            (await bcrypt.compare(password, user.passwordHash));
 
         // Same message for both cases, so attackers can't tell which emails exist
         if (!passwordMatches) {
@@ -87,8 +90,8 @@ const login = async (req, res) => {
         }
 
         // 5. Remember when they last logged in
-        user.lastLoginAt = new Date();
-        await user.save();
+        // updateOne skips full-document validation, so an older/odd record can't crash login
+        await User.updateOne({ _id: user._id }, { $set: { lastLoginAt: new Date() } });
 
         res.json({
             message: "Login successful",
@@ -96,7 +99,7 @@ const login = async (req, res) => {
             user: publicUser(user),
         });
     } catch (error) {
-        console.error("Login error:", error.message);
+        console.error("Login error:", error);
         res.status(500).json({ message: "Something went wrong on the server" });
     }
 };
